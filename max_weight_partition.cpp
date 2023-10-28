@@ -44,8 +44,24 @@ void subset_encoder(const str_list & broken_line, Data & data) {
 }
 
 void name_parser(const str_list & broken_line, Data & data) {
-    cout << "name_parser" << endl;
-
+    auto & idx2name = data.idx2name;
+    auto & name2idx = data.name2idx;
+    bool number_read = false;
+    bool word_read = false;
+    for (auto word : broken_line) {
+        if (! number_read) {
+            number_read = true;
+            continue;
+        }
+        word_read = true;
+        if (name2idx.find(word) == name2idx.end()) {
+            name2idx[word] = idx2name.size();
+            idx2name.push_back(word);
+        }
+    }
+    if (!word_read) {
+        throw OTCError() << "Line without subset element labels.";
+    }
 }
 
 void read_labels(string & fp, Data & data, broken_line_parser blp) {
@@ -86,6 +102,10 @@ void read_labels(string & fp, Data & data, broken_line_parser blp) {
 void run(std::string &fp) {
     Data data;
     read_labels(fp, data, name_parser);
+    unsigned idx = 0;
+    for (auto name : data.idx2name) {
+        cerr << "  label " << idx++ << " \"" << name << "\"\n";
+    }
     read_labels(fp, data, subset_encoder);
 }
 
