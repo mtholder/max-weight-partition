@@ -11,14 +11,14 @@ using namespace std;
 using otc::OTCError;
 
 // also from otc
-std::list<std::string> split_string(const std::string &s, const char delimiter);
+using str_list = std::list<std::string>;
+str_list split_string(const std::string &s, const char delimiter);
 
-std::list<std::string> split_string(const std::string &s, const char delimiter) {
-    // FIXME - this preserves old behavior - I don't know if we actually need this
+inline str_list split_string(const std::string &s, const char delimiter) {
     if (s.empty()) {
         return {};
     }
-    std::list<std::string> r;
+    str_list r;
     r.push_back({});
     for (const auto & c : s) {
         if (c == delimiter) {
@@ -31,8 +31,24 @@ std::list<std::string> split_string(const std::string &s, const char delimiter) 
 }
 
 // end otc
+class Data {
+public:
+    vector<string> idx2name;
+    map<string, size_t> name2idx;
+};
 
-void read_labels(string & fp, vector<string> & idx2name, map<string, size_t> & name2idx) {
+using broken_line_parser = void (*)(const str_list &, Data & );
+
+void subset_encoder(const str_list & broken_line, Data & data) {
+    cout << "subset_encoder" << endl;
+}
+
+void name_parser(const str_list & broken_line, Data & data) {
+    cout << "name_parser" << endl;
+
+}
+
+void read_labels(string & fp, Data & data, broken_line_parser blp) {
     ifstream inp{fp};
     if (!inp.good()) {
         throw OTCError() << "file \"" << fp << "\" is not a readable file.";
@@ -49,13 +65,15 @@ void read_labels(string & fp, vector<string> & idx2name, map<string, size_t> & n
             if (num_subsets < 1) {
                 throw OTCError() << "at least on subset is required.";
             }
-            if ((i_end - line_c) != next_line.size()) {
+            size_t num_read = static_cast<size_t>(i_end - line_c);
+            if (num_read != next_line.size()) {
                 throw OTCError() << "content after the number of subsets is not allowed on line 1";
             }
         } else {
             auto sub_split = split_string(next_line, ',');
             if (!sub_split.empty()) {
                 subsets_read++;
+                blp(sub_split, data);
             }
         }
     }
@@ -66,9 +84,9 @@ void read_labels(string & fp, vector<string> & idx2name, map<string, size_t> & n
 
 
 void run(std::string &fp) {
-    vector<string> idx2name;
-    map<string, size_t> name2idx;
-    read_labels(fp, idx2name, name2idx);
+    Data data;
+    read_labels(fp, data, name_parser);
+    read_labels(fp, data, subset_encoder);
 }
 
 int main(int argc, char *argv[]) {
