@@ -1,17 +1,21 @@
-#include "error.h"
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 #include <list>
 
-#include <stdlib.h>     /* strtol */
+#include <cstdlib> 
+#include "error.h"
 using namespace std;
 using otc::OTCError;
 
 // also from otc
 using str_list = std::list<std::string>;
+using subset_t = set<size_t>;
+using subset2wt_t = map<subset_t, double>;
+
 str_list split_string(const std::string &s, const char delimiter);
 
 inline str_list split_string(const std::string &s, const char delimiter) {
@@ -35,12 +39,40 @@ class Data {
 public:
     vector<string> idx2name;
     map<string, size_t> name2idx;
+    subset2wt_t subsets_to_wts;
 };
 
 using broken_line_parser = void (*)(const str_list &, Data & );
 
 void subset_encoder(const str_list & broken_line, Data & data) {
-    cout << "subset_encoder" << endl;
+    const auto & name2idx = data.name2idx;
+    auto & subsets_to_wts = data.subsets_to_wts;
+    double wt = -1.0;
+    subset_t sub;
+    for (auto word : broken_line) {
+        if (wt <= 0) {
+            char * w_end;
+            wt = strtod(word.c_str(), &w_end);
+            size_t num_read = static_cast<size_t>(w_end - word.c_str());
+            if (num_read != word.size()) {
+                cerr << "word = " << word << " num_read = " << num_read << " wt=" << wt << endl;
+                throw OTCError() << "weight not entirely convertable to a floating point number";
+            }
+            if (wt <= 0.0) {
+                throw OTCError() << "weights must be positive";
+            }
+            continue;
+        }
+        auto idx = name2idx.at(word);
+        if (sub.find(idx) != sub.end()) {
+            throw OTCError() << "label \"" << word << "\" repeated in a subset.\n";
+        }
+        sub.insert(idx);
+    }
+    if (subsets_to_wts.find(sub) != subsets_to_wts.end()) {
+        throw OTCError() << "subset repeated in subset weighting lines";
+    }
+    subsets_to_wts[sub] = wt;
 }
 
 void name_parser(const str_list & broken_line, Data & data) {
