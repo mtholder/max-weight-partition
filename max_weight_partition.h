@@ -16,13 +16,17 @@ using str_list = std::list<std::string>;
 using subset_t = set<size_t>;
 using subset2wt_t = map<subset_t, double>;
 
-// end otc
+class ConnectedComponent {
+public:
+    subset2wt_t subsets_to_wts;
+    subset_t label_set;
+};
+
 class Data {
 public:
     vector<string> idx2name;
     map<string, size_t> name2idx;
-    subset2wt_t subsets_to_wts;
-    subset_t label_set;
+    ConnectedComponent cc;
 };
 
 using broken_line_parser = void (*)(const str_list &, Data & );
