@@ -1,6 +1,3 @@
 2 labels, 3 subsets.
   1 subsets, best score=1: [frozenset({'Platacanthomys lasiurus', 'Typhlomys cinereus'})]
   2 subsets, best score=20: [frozenset({'Platacanthomys lasiurus'}), frozenset({'Typhlomys cinereus'})]
-2 labels, 3 subsets.
-  1 subsets, best score=1: [frozenset({'Platacanthomys lasiurus', 'Typhlomys cinereus'})]
-  2 subsets, best score=20: [frozenset({'Platacanthomys lasiurus'}), frozenset({'Typhlomys cinereus'})]

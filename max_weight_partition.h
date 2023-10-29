@@ -15,15 +15,32 @@ using otc::OTCError;
 using str_list = std::list<std::string>;
 using subset_t = set<size_t>;
 using subset2wt_t = map<subset_t, double>;
+using subset_vec_t = vector<subset_t>;
+
+class Resolution {
+public:
+    Resolution(const subset_vec_t & subsets_vec, double res_score)
+      :subsets(subsets_vec),
+      score(res_score) {
+      }
+    const subset_vec_t subsets;
+    const double score;
+};
+using res_by_size_t = map<size_t, Resolution>;
 
 class ConnectedComponent {
 public:
+    void fill_resolutions();
+
     subset2wt_t subsets_to_wts;
     subset_t label_set;
+    res_by_size_t resolutions;
 };
 
 class Data {
 public:
+    void write(ostream & out) const;
+
     vector<string> idx2name;
     map<string, size_t> name2idx;
     ConnectedComponent cc;
