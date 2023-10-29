@@ -4,32 +4,42 @@
 #include <climits>
 #include <algorithm>
 
-using cache_map_t = std::map<subset_t, ConnectedComponent>;
+using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 
 cache_map_t SOLN_CACHE;
 bool USE_MOST_FREQ = false;
 
 list<ConnectedComponent> sub_cc_list;
 
-ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
+template<typename T>
+inline std::set<T> set_difference_as_set(const std::set<T> & fir, const std::set<T> & sec) {
+    std::set<T> d;
+    set_difference(begin(fir), end(fir), begin(sec), end(sec), std::inserter(d, d.end()));
+    return d;
+}
+
+const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
                                   const vector<subset_t > &viable_others,
                                   const ConnectedComponent & par_cc) {
     assert(!viable_others.empty());
-    subset_t labels_in_vo;
+    subset_t labels_still_needed = labels_needed;
+
     bool have_labels_we_need = false;
     for (auto vop : viable_others) {
-        labels_in_vo.insert(vop.begin(), vop.end());
-        if (labels_in_vo == labels_needed) {
+        labels_still_needed = set_difference_as_set(labels_still_needed, vop);
+        if (labels_still_needed.empty()) {
             have_labels_we_need = true;
             break;
         }
     }
     if (! have_labels_we_need) {
+        SOLN_CACHE[labels_needed] = nullptr;
         return nullptr;
     }
     auto cache_it =  SOLN_CACHE.find(labels_needed);
     if (cache_it != SOLN_CACHE.end()) {
-        return &(cache_it->second);
+        // cerr << "Cache hit for size " << labels_needed.size() << endl;
+        return cache_it->second;
     }
 
     sub_cc_list.emplace_back();
@@ -38,9 +48,10 @@ ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
         const subset_t & subset = vop;
         new_cc.subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
     }
-    swap(new_cc.label_set, labels_in_vo);
+    new_cc.label_set = labels_needed;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
     new_cc.fill_resolutions();
+    SOLN_CACHE[labels_needed] = &(new_cc);
     return &new_cc;
 }
 
