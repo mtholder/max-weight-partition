@@ -13,12 +13,18 @@ list<ConnectedComponent> sub_cc_list;
 
 const Data *gData = nullptr;
 
+void db_indent(unsigned int level) {
+    for (unsigned int i=0; i < level; ++i) {
+        cerr << "  ";
+    }
+}
 
-void db_msg_pivot(size_t label_idx) {
+void db_msg_pivot(unsigned int level, size_t label_idx) {
     if (gData == nullptr) {
         return;
     }
-    cerr << "db_msg_pivot label " << label_idx << " \'" << gData->idx2name[label_idx] << "\'" << endl;
+    db_indent(level);
+    cerr << "db: pivot label " << label_idx << " \'" << gData->idx2name[label_idx] << "\'" << endl;
 }
 
 set<string> db_trans_idx_set(const subset_t & subset) {
@@ -29,20 +35,15 @@ set<string> db_trans_idx_set(const subset_t & subset) {
     }
     return ret;
 }
-void db_msg(std::string pref) {
+void db_msg(unsigned int level, std::string pref) {
     if (gData == nullptr) {
         return;
     }
-    cerr << "db_msg " << pref << endl;
+    db_indent(level);
+    cerr << "db: " << pref << endl;
 }
-void db_msg_set(std::string pref, const subset_t & subset, bool header=true) {
-    if (gData == nullptr) {
-        return;
-    }
-    if (header) {
-        cerr << "db_msg_set " ;
-    }
-    cerr << pref << " for " << subset.size() << " indices: ";
+
+inline void db_set_int_internal(const subset_t & subset) {
     bool first = true;
     for (auto idx : subset) {
         if (first) {
@@ -52,12 +53,10 @@ void db_msg_set(std::string pref, const subset_t & subset, bool header=true) {
         }
         cerr << idx;
     }
-    cerr << endl;
-    if (header) {
-        cerr << "db_msg_set " ;
-    }
-    cerr << pref << " for " << subset.size() << " alpha-str: ";
-    first = true;
+}
+
+inline void db_set_str_internal(const subset_t & subset) {
+    bool first = true;
     auto ss = db_trans_idx_set(subset);
     for (auto word : ss) {
         if (first) {
@@ -67,15 +66,55 @@ void db_msg_set(std::string pref, const subset_t & subset, bool header=true) {
         }
         cerr << '\'' << word << '\'';
     }
+}
+
+void db_msg_set(unsigned int level, std::string pref, const subset_t & subset, bool header=true) {
+    if (gData == nullptr) {
+        return;
+    }
+    db_indent(level);
+    if (header) {
+        cerr << "db: " ;
+    }
+    cerr << pref << " for " << subset.size() << " indices: ";
+    db_set_int_internal(subset);
+    cerr << endl;
+    db_indent(level);
+    if (header) {
+        cerr << "db: " ;
+    }
+    cerr << pref << " for " << subset.size() << " alpha-str: ";
+    db_set_str_internal(subset);
     cerr << endl;
 }
 
 template <typename T>
-void db_msg_set_container(std::string pref, const T & subset_cont) {
-    cerr << "db_msg_set_container " << pref << " for container of size = " << subset_cont.size() << endl;
-    for (auto subset : subset_cont) {
-        db_msg_set("    ", subset);
+void db_msg_set_container(unsigned int level, std::string pref, const T & subset_cont) {
+    if (gData == nullptr) {
+        return;
     }
+    db_indent(level);
+    cerr << "db: " << pref << " for container of size = " << subset_cont.size() << endl;
+    for (auto subset : subset_cont) {
+        db_msg_set(level, "    ", subset, false);
+    }
+}
+
+
+void db_msg_resolution(unsigned int level, const std::string & pref, const subset_vec_t &subset_cont, double res_score) {
+    db_indent(level);
+    cerr << pref <<  " size=" << subset_cont.size() << " score=" << res_score << ": ints (";
+    for (auto subset : subset_cont) {
+        db_set_int_internal(subset);
+        cerr << " | ";
+    }
+    cerr << "), alpha-str (";
+    for (auto subset : subset_cont) {
+        db_set_str_internal(subset);
+        cerr << " | ";
+    }
+    cerr << ")" << endl;
+    
 }
 
 
@@ -92,26 +131,27 @@ const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
                                   const ConnectedComponent & par_cc) {
     auto cache_it =  SOLN_CACHE.find(labels_needed);
     if (cache_it != SOLN_CACHE.end()) {
-        db_msg_set("Cache hit for", labels_needed);
+        db_msg_set(par_cc.level, "Cache hit for", labels_needed);
         return cache_it->second;
     }
 
     assert(!viable_others.empty());
     subset_t labels_still_needed = labels_needed;
-
+    subset_t labels_union;
     bool have_labels_we_need = false;
     for (auto vop : viable_others) {
         labels_still_needed = set_difference_as_set(labels_still_needed, vop);
+        labels_union.insert(vop.begin(), vop.end());
         if (labels_still_needed.empty()) {
             have_labels_we_need = true;
             break;
         }
     }
     if (! have_labels_we_need) {
-        db_msg_set("Missing labels", labels_still_needed);
+        db_msg_set(par_cc.level, "Missing labels", labels_still_needed);
         return nullptr;
     }
-
+    assert(labels_union == labels_needed);
     sub_cc_list.emplace_back();
     ConnectedComponent & new_cc = *(sub_cc_list.rbegin());
     for (auto vop : viable_others) {
@@ -119,6 +159,7 @@ const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
         new_cc.subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
     }
     new_cc.label_set = labels_needed;
+    new_cc.level = par_cc.level + 1;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
     new_cc.fill_resolutions();
     SOLN_CACHE[labels_needed] = &(new_cc);
@@ -195,6 +236,23 @@ inline size_t ConnectedComponent::choose_one_label_index() const {
     return rarest_label_index;
 }
 
+inline void ConnectedComponent::add_resolution(const subset_vec_t &v, double res_score) {
+    db_msg_resolution(level, " Condsidering Resolution", v, res_score);
+    auto sz = v.size();
+    auto res_it = resolutions.find(sz);
+
+    // cerr << "Considering res of size " << sz << " with score = " << res_score << "\n";
+    if (res_it == resolutions.end() || res_it->second.score < res_score) {
+        // cerr << "Adding res of size " << sz << " with score = " << res_score << "\n";
+        resolutions.emplace(std::piecewise_construct,
+                            std::forward_as_tuple(sz),
+                            std::forward_as_tuple(v, res_score));
+        db_msg(level, "ADDED");
+    } else {
+        db_msg(level, "NOT ADDED");
+    }
+}
+
 void ConnectedComponent::fill_resolutions() {
     assert(!subsets_to_wts.empty());
     if (subsets_to_wts.size() == 1) {
@@ -204,7 +262,7 @@ void ConnectedComponent::fill_resolutions() {
         return;
     }
     size_t one_label_idx = choose_one_label_index();
-    db_msg_pivot(one_label_idx);
+    db_msg_pivot(level, one_label_idx);
     vector<subset_t> alternatives;
     vector<subset_t> others;
     alternatives.reserve(subsets_to_wts.size());
@@ -221,21 +279,22 @@ void ConnectedComponent::fill_resolutions() {
     vector<subset_t> viable_others;
     viable_others.reserve(subsets_to_wts.size());
     if (gData != nullptr) {
-        cerr << "Trying the " << alternatives.size() << " alternatives for idx=" << one_label_idx << endl;
+        db_indent(level);
+        cerr << "db: Trying the " << alternatives.size() << " alternatives for idx=" << one_label_idx << endl;
     }
     for (auto alt : alternatives) {
         const subset_t & curr_subset = alt;
-        db_msg_set(" NEXT alt", curr_subset);
+        db_msg_set(level, " NEXT alt", curr_subset);
         double curr_score = subsets_to_wts.at(curr_subset);
         subset_t labels_needed;
         set_difference (label_set.begin(), label_set.end(),
                         curr_subset.begin(), curr_subset.end(),
                         inserter(labels_needed, labels_needed.begin()));
-        db_msg_set(" NEXT labels_needed", labels_needed);;
+        db_msg_set(level, " NEXT labels_needed", labels_needed);;
         if (labels_needed.empty()) {
             subset_vec_t subsets_vec{1, curr_subset};
             add_resolution(subsets_vec, curr_score);
-            db_msg("  no leaves needed for this alt");
+            db_msg(level, "  no leaves needed for this alt");
             continue;
         }
         viable_others.clear();
@@ -245,14 +304,14 @@ void ConnectedComponent::fill_resolutions() {
                 viable_others.push_back(other_set);
             }
         }
-        db_msg_set_container("  viable_others", viable_others);
+        db_msg_set_container(level, "  viable_others", viable_others);
         if (viable_others.empty()) {
-            db_msg("  no viable_others for this alt");
+            db_msg(level, "  no viable_others for this alt");
             continue;
         }
         auto sub_cc = cc_for_subset(labels_needed, viable_others, *this);
         if (sub_cc == nullptr) {
-            db_msg("  no sub_cc returned for this alt");
+            db_msg(level, "  no sub_cc returned for this alt");
             continue;
         }
         for (auto sres : sub_cc->resolutions) {
@@ -262,11 +321,6 @@ void ConnectedComponent::fill_resolutions() {
             subsets_vec.push_back(curr_subset);
             for (auto s : res.subsets) {
                 subsets_vec.push_back(s);
-            }
-            db_msg_set(" res for alt", curr_subset);
-            db_msg_set_container("(maybe) adding resolution", subsets_vec);
-            if (gData != nullptr) {
-                cerr << " (with score = " <<  res.score + curr_score << ")" << endl;
             }
             add_resolution(subsets_vec, res.score + curr_score);
         }
