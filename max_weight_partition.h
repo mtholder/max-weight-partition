@@ -7,6 +7,8 @@
 #include <set>
 #include <vector>
 #include <list>
+#include <tuple>
+#include <utility>
 
 #include <cstdlib> 
 #include "error.h"
@@ -35,6 +37,19 @@ public:
     subset2wt_t subsets_to_wts;
     subset_t label_set;
     res_by_size_t resolutions;
+private:
+    void add_resolution(const subset_vec_t &v, double res_score) {
+        auto sz = v.size();
+        auto res_it = resolutions.find(sz);
+        if (res_it == resolutions.end() || res_it->second.score < res_score) {
+            resolutions.emplace(std::piecewise_construct,
+                                std::forward_as_tuple(sz),
+                                std::forward_as_tuple(v, res_score));
+        }
+    }
+    size_t choose_one_label_index() const;
+    unsigned int num_subsets_with_label(size_t curr_idx) const;
+    
 };
 
 class Data {
