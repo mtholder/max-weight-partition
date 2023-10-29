@@ -39,6 +39,8 @@ ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
         new_cc.subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
     }
     swap(new_cc.label_set, labels_in_vo);
+    // cerr << "CALLING fill_resolutions on sub_cc" << endl;
+    new_cc.fill_resolutions();
     return &new_cc;
 }
 
@@ -136,7 +138,9 @@ void ConnectedComponent::fill_resolutions() {
     assert(!alternatives.empty());
     vector<subset_t> viable_others;
     viable_others.reserve(subsets_to_wts.size());
+    // cerr << "Trying the " << alternatives.size() << " alternatives for idx=" << one_label_idx << endl;
     for (auto alt : alternatives) {
+        // cerr << " NEXT alt" << endl;
         const subset_t & curr_subset = alt;
         double curr_score = subsets_to_wts.at(curr_subset);
         subset_t leaves_needed;
@@ -146,6 +150,7 @@ void ConnectedComponent::fill_resolutions() {
         if (leaves_needed.empty()) {
             subset_vec_t subsets_vec{1, curr_subset};
             add_resolution(subsets_vec, curr_score);
+            // cerr << "  no leaves needed for this alt" << endl;
             continue;
         }
         viable_others.clear();
@@ -156,15 +161,27 @@ void ConnectedComponent::fill_resolutions() {
             }
         }
         if (viable_others.empty()) {
+            // cerr << "  no viable_others for this alt" << endl;
             continue;
         }
         auto sub_cc = cc_for_subset(leaves_needed, viable_others, *this);
         if (sub_cc == nullptr) {
+            // cerr << "  no sub_cc returned for this alt" << endl;
             continue;
         }
+        for (auto sres : sub_cc->resolutions) {
+            const Resolution & res = sres.second;
+            subset_vec_t subsets_vec;
+            subsets_vec.reserve(1 + res.subsets.size());
+            subsets_vec.push_back(curr_subset);
+            for (auto s : res.subsets) {
+                subsets_vec.push_back(s);
+            }
+            // cerr << "  adding a res for this alt" << endl;
+            
+            add_resolution(subsets_vec, res.score + curr_score);
+        }
     }
-
-       
 }
 
 void Data::write(ostream & out) const {

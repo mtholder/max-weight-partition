@@ -41,7 +41,10 @@ private:
     void add_resolution(const subset_vec_t &v, double res_score) {
         auto sz = v.size();
         auto res_it = resolutions.find(sz);
+
+        // cerr << "Considering res of size " << sz << " with score = " << res_score << "\n";
         if (res_it == resolutions.end() || res_it->second.score < res_score) {
+            // cerr << "Adding res of size " << sz << " with score = " << res_score << "\n";
             resolutions.emplace(std::piecewise_construct,
                                 std::forward_as_tuple(sz),
                                 std::forward_as_tuple(v, res_score));
