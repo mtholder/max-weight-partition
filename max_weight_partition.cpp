@@ -14,7 +14,7 @@ list<ConnectedComponent> sub_cc_list;
 
 const Data *gData = nullptr;
 
-void db_indent(unsigned int level) {
+inline void db_indent(unsigned int level) {
     for (unsigned int i=0; i < level; ++i) {
         cerr << "  ";
     }
@@ -36,12 +36,17 @@ set<string> db_trans_idx_set(const subset_t & subset) {
     }
     return ret;
 }
-void db_msg(unsigned int level, std::string pref) {
+
+inline void indented_msg(unsigned int level, std::string pref) {
+    db_indent(level);
+    cerr << "db: " << pref << endl;
+}
+
+inline void db_msg(unsigned int level, std::string pref) {
     if (gData == nullptr) {
         return;
     }
-    db_indent(level);
-    cerr << "db: " << pref << endl;
+    indented_msg(level, pref);
 }
 
 inline void db_set_int_internal(const subset_t & subset) {
@@ -311,7 +316,13 @@ void ConnectedComponent::fill_resolutions() {
     viable_others.reserve(subsets_to_wts.size());
     db_msg_set_container(level, "alternatives", alternatives);
     db_msg_set_container(level, "others", others);
+    size_t alt_idx = 0;
     for (auto alt : alternatives) {
+        if (level < 4) {
+            stringstream x;
+            x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
+            indented_msg(level, x.str());
+        }
         const LightSubset & curr_subset = alt;
         db_msg_set(level, " NEXT alt", curr_subset.stored_set());
         double curr_score = subsets_to_wts.at(curr_subset);
