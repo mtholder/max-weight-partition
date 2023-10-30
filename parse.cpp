@@ -21,8 +21,10 @@ inline str_list split_string(const std::string &s, const char delimiter) {
 void subset_encoder(const str_list & broken_line, Data & data) {
     const auto & name2idx = data.name2idx;
     auto & subsets_to_wts = data.cc.subsets_to_wts;
+    auto & subsets_to_subset_idx = data.subsets_to_subset_idx;
     double wt = -1.0;
     subset_t sub;
+    data.input_sub_order.reserve(data.num_subsets);
     for (auto word : broken_line) {
         if (wt <= 0) {
             char * w_end;
@@ -47,6 +49,8 @@ void subset_encoder(const str_list & broken_line, Data & data) {
         throw OTCError() << "subset repeated in subset weighting lines";
     }
     subsets_to_wts[sub] = wt;
+    subsets_to_subset_idx[sub] = data.input_sub_order.size();
+    data.input_sub_order.push_back(sub);
 }
 
 void name_parser(const str_list & broken_line, Data & data) {
@@ -102,6 +106,8 @@ void read_labels(string & fp, Data & data, broken_line_parser blp) {
     if (subsets_read != num_subsets) {
         throw OTCError() << "Expecting " << num_subsets << " lines, but read " << subsets_read;
     }
+    data.num_subsets = static_cast<size_t>(num_subsets);
+    
 }
 
 void validate_data(Data & data) {

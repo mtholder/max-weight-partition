@@ -52,6 +52,10 @@ public:
     vector<string> idx2name;
     map<string, size_t> name2idx;
     ConnectedComponent cc;
+    // fields that are helpful for debuggin
+    map<subset_t, size_t> subsets_to_subset_idx;
+    subset_vec_t input_sub_order;
+    size_t num_subsets;
 };
 
 using broken_line_parser = void (*)(const str_list &, Data & );

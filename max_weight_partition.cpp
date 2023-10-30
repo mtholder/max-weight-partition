@@ -76,16 +76,16 @@ void db_msg_set(unsigned int level, std::string pref, const subset_t & subset, b
     if (header) {
         cerr << "db: " ;
     }
-    cerr << pref << " for " << subset.size() << " indices: ";
+    cerr << pref << " for " << subset.size() << " indices: {";
     db_set_int_internal(subset);
-    cerr << endl;
-    db_indent(level);
-    if (header) {
-        cerr << "db: " ;
-    }
-    cerr << pref << " for " << subset.size() << " alpha-str: ";
+    // cerr << endl;
+    // db_indent(level);
+    // if (header) {
+    //     cerr << "db: " ;
+    // }
+    cerr << "} alpha-str: {";
     db_set_str_internal(subset);
-    cerr << endl;
+    cerr << '}' << endl;
 }
 
 template <typename T>
@@ -103,7 +103,7 @@ void db_msg_set_container(unsigned int level, std::string pref, const T & subset
 
 void db_msg_resolution(unsigned int level, const std::string & pref, const subset_vec_t &subset_cont, double res_score) {
     db_indent(level);
-    cerr << pref <<  " size=" << subset_cont.size() << " score=" << res_score << ": ints (";
+    cerr << "db: " << pref <<  " size=" << subset_cont.size() << " score=" << res_score << ": ints (";
     for (auto subset : subset_cont) {
         db_set_int_internal(subset);
         cerr << " | ";
@@ -241,9 +241,7 @@ inline void ConnectedComponent::add_resolution(const subset_vec_t &v, double res
     auto sz = v.size();
     auto res_it = resolutions.find(sz);
 
-    // cerr << "Considering res of size " << sz << " with score = " << res_score << "\n";
     if (res_it == resolutions.end() || res_it->second.score < res_score) {
-        // cerr << "Adding res of size " << sz << " with score = " << res_score << "\n";
         resolutions.emplace(std::piecewise_construct,
                             std::forward_as_tuple(sz),
                             std::forward_as_tuple(v, res_score));
@@ -366,6 +364,16 @@ void run(std::string &fp) {
     }
     read_labels(fp, data, subset_encoder);
     validate_data(data);
+    cerr << data.num_subsets << " subsets";
+    for (size_t i = 0; i < data.num_subsets; ++i) {
+        const auto & sub = data.input_sub_order.at(i);
+        cerr << "  Subset-" << i << " as idx = {";
+        db_set_int_internal(sub);
+        cerr << "} alpha-str = {";
+        db_set_str_internal(sub); 
+        cerr << "} weight = " << data.cc.subsets_to_wts.at(sub) << endl;
+    }
+    
     data.cc.fill_resolutions();
     data.write(cout);
 }
