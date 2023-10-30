@@ -21,7 +21,6 @@ https://github.com/ksholla20/cachelib by GitHub user ksholla20
 Those modified files are: 
   * Cache.cpp
   * Cache.h
-  * custom_priority_queue.h
   * DoublyLinkedList.h
   * LRUCache.cpp
   * LRUCache.h
