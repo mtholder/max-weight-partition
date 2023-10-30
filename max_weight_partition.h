@@ -21,12 +21,16 @@ using subset_vec_t = vector<subset_t>;
 
 class Resolution {
 public:
+    Resolution()
+        :score(-1) {
+
+    }
     Resolution(const subset_vec_t & subsets_vec, double res_score)
       :subsets(subsets_vec),
       score(res_score) {
       }
-    const subset_vec_t subsets;
-    const double score;
+    subset_vec_t subsets;
+    double score;
 };
 using res_by_size_t = map<size_t, Resolution>;
 
@@ -39,7 +43,7 @@ public:
     res_by_size_t resolutions;
     unsigned int level = 0;
 private:
-    void add_resolution(const subset_vec_t &v, double res_score);
+    void add_resolution(subset_vec_t &v, double res_score);
     size_t choose_one_label_index() const;
     unsigned int num_subsets_with_label(size_t curr_idx) const;
     

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <climits>
 #include <algorithm>
+#include <sstream>
 
 using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 
@@ -76,7 +77,13 @@ void db_msg_set(unsigned int level, std::string pref, const subset_t & subset, b
     if (header) {
         cerr << "db: " ;
     }
-    cerr << pref << " for " << subset.size() << " indices: {";
+    cerr << pref;
+    auto s2si_it = gData->subsets_to_subset_idx.find(subset);
+    if (s2si_it != gData->subsets_to_subset_idx.end()) {
+        cerr << " INPUT-SUBSET idx=" << s2si_it->second << " (size="<< subset.size() << ")" << endl;
+        return;
+    }
+    cerr << " for " << subset.size() << " indices: {";
     db_set_int_internal(subset);
     // cerr << endl;
     // db_indent(level);
@@ -94,26 +101,51 @@ void db_msg_set_container(unsigned int level, std::string pref, const T & subset
         return;
     }
     db_indent(level);
-    cerr << "db: " << pref << " for container of size = " << subset_cont.size() << endl;
+    cerr << "db: " << pref << " for container of size = " << subset_cont.size() << ": ";
+    bool first = true;
     for (auto subset : subset_cont) {
-        db_msg_set(level, "    ", subset, false);
+        if (first) {
+            first = false;
+        } else {
+            cerr << ", ";
+        }
+        cerr << gData->subsets_to_subset_idx.at(subset);
     }
+    cerr << endl;
+    // for (auto subset : subset_cont) {
+    //     db_msg_set(level, "    ", subset, false);
+    // }
 }
 
 
 void db_msg_resolution(unsigned int level, const std::string & pref, const subset_vec_t &subset_cont, double res_score) {
+    if (gData == nullptr) {
+        return;
+    }
     db_indent(level);
-    cerr << "db: " << pref <<  " size=" << subset_cont.size() << " score=" << res_score << ": ints (";
+    cerr << "db: " << pref <<  " size=" << subset_cont.size() << " score=" << res_score;
+    cerr << " INPUT-SUBSETs: ";
+    bool first = true;
     for (auto subset : subset_cont) {
-        db_set_int_internal(subset);
-        cerr << " | ";
+        if (first) {
+            first = false;
+        } else {
+            cerr << ", ";
+        }
+        cerr << gData->subsets_to_subset_idx.at(subset);
     }
-    cerr << "), alpha-str (";
-    for (auto subset : subset_cont) {
-        db_set_str_internal(subset);
-        cerr << " | ";
-    }
-    cerr << ")" << endl;
+    cerr << endl;
+    // cerr << ": ints (";
+    // for (auto subset : subset_cont) {
+    //     db_set_int_internal(subset);
+    //     cerr << " | ";
+    // }
+    // cerr << "), alpha-str (";
+    // for (auto subset : subset_cont) {
+    //     db_set_str_internal(subset);
+    //     cerr << " | ";
+    // }
+    // cerr << ")" << endl;
     
 }
 
@@ -236,18 +268,18 @@ inline size_t ConnectedComponent::choose_one_label_index() const {
     return rarest_label_index;
 }
 
-inline void ConnectedComponent::add_resolution(const subset_vec_t &v, double res_score) {
-    db_msg_resolution(level, " Condsidering Resolution", v, res_score);
+inline void ConnectedComponent::add_resolution(subset_vec_t &v, double res_score) {
+    db_msg_resolution(level, " Considering Resolution", v, res_score);
     auto sz = v.size();
-    auto res_it = resolutions.find(sz);
-
-    if (res_it == resolutions.end() || res_it->second.score < res_score) {
-        resolutions.emplace(std::piecewise_construct,
-                            std::forward_as_tuple(sz),
-                            std::forward_as_tuple(v, res_score));
+    Resolution & res = resolutions[sz];
+    if (res_score > res.score) {
+        swap(res.subsets, v);
+        res.score = res_score;
         db_msg(level, "ADDED");
     } else {
-        db_msg(level, "NOT ADDED");
+        stringstream m;
+        m << "NOT ADDED curr score=" << res.score;
+        db_msg(level, m.str());
     }
 }
 
@@ -276,10 +308,8 @@ void ConnectedComponent::fill_resolutions() {
     assert(!alternatives.empty());
     vector<subset_t> viable_others;
     viable_others.reserve(subsets_to_wts.size());
-    if (gData != nullptr) {
-        db_indent(level);
-        cerr << "db: Trying the " << alternatives.size() << " alternatives for idx=" << one_label_idx << endl;
-    }
+    db_msg_set_container(level, "alternatives", alternatives);
+    db_msg_set_container(level, "others", others);
     for (auto alt : alternatives) {
         const subset_t & curr_subset = alt;
         db_msg_set(level, " NEXT alt", curr_subset);
