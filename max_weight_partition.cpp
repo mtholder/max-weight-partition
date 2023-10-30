@@ -4,13 +4,13 @@
 #include <climits>
 #include <algorithm>
 #include <sstream>
+#include "LRUCache.h"
 
-using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
+// using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
+// cache_map_t SOLN_CACHE;
+LRUCache SOLN_CACHE{1000000};
 
-cache_map_t SOLN_CACHE;
 bool USE_MOST_FREQ = false;
-
-list<ConnectedComponent> sub_cc_list;
 
 const Data *gData = nullptr;
 
@@ -163,13 +163,14 @@ inline std::set<T> set_difference_as_set(const std::set<T> & fir, const std::set
     return d;
 }
 
-const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
+shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
                                   const vector<LightSubset> &viable_others,
                                   const ConnectedComponent & par_cc) {
-    auto cache_it =  SOLN_CACHE.find(labels_needed);
-    if (cache_it != SOLN_CACHE.end()) {
+    
+    auto cache_pair = SOLN_CACHE.get_pair(labels_needed);
+    if (cache_pair.first) {
         db_msg_set(par_cc.level, "Cache hit for", labels_needed);
-        return cache_it->second;
+        return cache_pair.second;
     }
 
     assert(!viable_others.empty());
@@ -186,22 +187,21 @@ const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
     }
     if (! have_labels_we_need) {
         db_msg_set(par_cc.level, "Missing labels", labels_still_needed);
-        SOLN_CACHE[labels_needed] = nullptr;
+        SOLN_CACHE.put(labels_needed, shared_ptr<ConnectedComponent>{});
         return nullptr;
     }
     assert(labels_union == labels_needed);
-    sub_cc_list.emplace_back();
-    ConnectedComponent & new_cc = *(sub_cc_list.rbegin());
+    shared_ptr<ConnectedComponent> new_cc{new ConnectedComponent()};
     for (auto vop : viable_others) {
         const auto & subset = vop;
-        new_cc.subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
+        new_cc->subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
     }
-    new_cc.label_set = labels_needed;
-    new_cc.level = par_cc.level + 1;
+    new_cc->label_set = labels_needed;
+    new_cc->level = par_cc.level + 1;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
-    new_cc.fill_resolutions();
-    SOLN_CACHE[labels_needed] = &(new_cc);
-    return &new_cc;
+    new_cc->fill_resolutions();
+    SOLN_CACHE.put(labels_needed, new_cc);
+    return new_cc;
 }
 
 //////////////////////////////////////////////
