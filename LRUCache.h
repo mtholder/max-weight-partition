@@ -4,23 +4,20 @@
 #include <algorithm>
 #include "Cache.h"
 #include "DoublyLinkedList.h"
-#include "custom_priority_queue.h"
 
 class LRUCache :
 	public Cache
 {
 private:
-	int cacheSize;
-	int curCnt = 0;
+	size_t cacheSize;
+	size_t curCnt = 0;
 	shared_ptr<DoublyLinkedList<CacheDataPtr>> DLL;
 	map<set<size_t>, ListNode<CacheDataPtr>*> M;
-	custom_priority_queue<CacheDataPtr, vector<CacheDataPtr>, comparator> P;
 
 	void deleteCacheEntry(ListNode<CacheDataPtr> * node);
-	void removeExpiredEntry();
 
 public:
-	LRUCache(int size=MAX_CACHE_SIZE);
+	LRUCache(size_t size=MAX_CACHE_SIZE);
 	shared_ptr<ConnectedComponent> get(const set<size_t> & key);
 	using cache_val_pair = std::pair<bool, shared_ptr<ConnectedComponent> >;
 	cache_val_pair get_pair(const set<size_t> & key) {
@@ -31,8 +28,7 @@ public:
 		return {true, get(key)};
 	}
 	void put(const set<size_t> &  key, 
-			 shared_ptr<ConnectedComponent> value, 
-			 int ttl=-1);
+			 shared_ptr<ConnectedComponent> value);
 	size_t size() const {
 		return curCnt;
 	}
