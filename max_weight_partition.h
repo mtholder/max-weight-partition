@@ -16,8 +16,33 @@ using namespace std;
 using otc::OTCError;
 using str_list = std::list<std::string>;
 using subset_t = set<size_t>;
-using subset2wt_t = map<subset_t, double>;
-using subset_vec_t = vector<subset_t>;
+
+class LightSubset {
+public:
+    LightSubset(const subset_t & sset)
+        :real_set(sset) {
+    }
+    subset_t::const_iterator begin() const {
+        return real_set.begin();
+    }
+    subset_t::const_iterator end() const {
+        return real_set.end();
+    }
+    bool operator<(const LightSubset &other) const {
+        return real_set < other.real_set;
+    }
+    size_t count(size_t el_idx) const {
+        return real_set.count(el_idx);
+    }
+    const subset_t & stored_set() const {
+        return real_set;
+    }
+private:
+    const subset_t & real_set; 
+};
+
+using subset2wt_t = map<LightSubset, double>;
+using subset_vec_t = vector<LightSubset>;
 
 class Resolution {
 public:
@@ -56,8 +81,9 @@ public:
     vector<string> idx2name;
     map<string, size_t> name2idx;
     ConnectedComponent cc;
+    list<subset_t> stable_subsets;
     // fields that are helpful for debuggin
-    map<subset_t, size_t> subsets_to_subset_idx;
+    map<LightSubset, size_t> subsets_to_subset_idx;
     subset_vec_t input_sub_order;
     size_t num_subsets;
 };

@@ -159,7 +159,7 @@ inline std::set<T> set_difference_as_set(const std::set<T> & fir, const std::set
 }
 
 const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
-                                  const vector<subset_t > &viable_others,
+                                  const vector<LightSubset> &viable_others,
                                   const ConnectedComponent & par_cc) {
     auto cache_it =  SOLN_CACHE.find(labels_needed);
     if (cache_it != SOLN_CACHE.end()) {
@@ -172,7 +172,7 @@ const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
     subset_t labels_union;
     bool have_labels_we_need = false;
     for (auto vop : viable_others) {
-        labels_still_needed = set_difference_as_set(labels_still_needed, vop);
+        labels_still_needed = set_difference_as_set(labels_still_needed, vop.stored_set());
         labels_union.insert(vop.begin(), vop.end());
         if (labels_still_needed.empty()) {
             have_labels_we_need = true;
@@ -181,13 +181,14 @@ const ConnectedComponent * cc_for_subset(const subset_t & labels_needed,
     }
     if (! have_labels_we_need) {
         db_msg_set(par_cc.level, "Missing labels", labels_still_needed);
+        SOLN_CACHE[labels_needed] = nullptr;
         return nullptr;
     }
     assert(labels_union == labels_needed);
     sub_cc_list.emplace_back();
     ConnectedComponent & new_cc = *(sub_cc_list.rbegin());
     for (auto vop : viable_others) {
-        const subset_t & subset = vop;
+        const auto & subset = vop;
         new_cc.subsets_to_wts[subset] = par_cc.subsets_to_wts.at(subset);
     }
     new_cc.label_set = labels_needed;
@@ -293,12 +294,12 @@ void ConnectedComponent::fill_resolutions() {
     }
     size_t one_label_idx = choose_one_label_index();
     db_msg_pivot(level, one_label_idx);
-    vector<subset_t> alternatives;
-    vector<subset_t> others;
+    vector<LightSubset> alternatives;
+    vector<LightSubset> others;
     alternatives.reserve(subsets_to_wts.size());
     others.reserve(subsets_to_wts.size());
     for (auto s2w_it : subsets_to_wts) {
-        const subset_t & subset_ref = (s2w_it.first);
+        const LightSubset & subset_ref = (s2w_it.first);
         if (subset_ref.count(one_label_idx) == 1) {
             alternatives.push_back(subset_ref);
         } else {
@@ -306,13 +307,13 @@ void ConnectedComponent::fill_resolutions() {
         }
     }
     assert(!alternatives.empty());
-    vector<subset_t> viable_others;
+    vector<LightSubset> viable_others;
     viable_others.reserve(subsets_to_wts.size());
     db_msg_set_container(level, "alternatives", alternatives);
     db_msg_set_container(level, "others", others);
     for (auto alt : alternatives) {
-        const subset_t & curr_subset = alt;
-        db_msg_set(level, " NEXT alt", curr_subset);
+        const LightSubset & curr_subset = alt;
+        db_msg_set(level, " NEXT alt", curr_subset.stored_set());
         double curr_score = subsets_to_wts.at(curr_subset);
         subset_t labels_needed;
         set_difference (label_set.begin(), label_set.end(),
@@ -327,8 +328,8 @@ void ConnectedComponent::fill_resolutions() {
         }
         viable_others.clear();
         for (auto other_set_ptr : others) {
-            const subset_t & other_set = other_set_ptr;
-            if (is_disjoint(other_set, curr_subset)) {
+            const LightSubset & other_set = other_set_ptr;
+            if (is_disjoint(other_set.stored_set(), curr_subset.stored_set())) {
                 viable_others.push_back(other_set);
             }
         }
@@ -385,6 +386,7 @@ void Data::write(ostream & out) const {
 }
 
 void run(std::string &fp) {
+    bool QUIET_MODE = true;
     Data data;
     gData = &data;
     read_labels(fp, data, name_parser);
@@ -394,16 +396,19 @@ void run(std::string &fp) {
     }
     read_labels(fp, data, subset_encoder);
     validate_data(data);
-    cerr << data.num_subsets << " subsets";
-    for (size_t i = 0; i < data.num_subsets; ++i) {
-        const auto & sub = data.input_sub_order.at(i);
-        cerr << "  Subset-" << i << " as idx = {";
-        db_set_int_internal(sub);
-        cerr << "} alpha-str = {";
-        db_set_str_internal(sub); 
-        cerr << "} weight = " << data.cc.subsets_to_wts.at(sub) << endl;
+    if (QUIET_MODE) {
+        gData = nullptr; // Sssshhh!
+    } else {
+        cerr << data.num_subsets << " subsets";
+        for (size_t i = 0; i < data.num_subsets; ++i) {
+            const auto & sub = data.input_sub_order.at(i);
+            cerr << "  Subset-" << i << " as idx = {";
+            db_set_int_internal(sub.stored_set());
+            cerr << "} alpha-str = {";
+            db_set_str_internal(sub.stored_set()); 
+            cerr << "} weight = " << data.cc.subsets_to_wts.at(sub) << endl;
+        }
     }
-    
     data.cc.fill_resolutions();
     data.write(cout);
 }

@@ -23,7 +23,8 @@ void subset_encoder(const str_list & broken_line, Data & data) {
     auto & subsets_to_wts = data.cc.subsets_to_wts;
     auto & subsets_to_subset_idx = data.subsets_to_subset_idx;
     double wt = -1.0;
-    subset_t sub;
+    data.stable_subsets.emplace_back();
+    subset_t & sub = *(data.stable_subsets.rbegin());
     data.input_sub_order.reserve(data.num_subsets);
     for (auto word : broken_line) {
         if (wt <= 0) {
@@ -45,12 +46,13 @@ void subset_encoder(const str_list & broken_line, Data & data) {
         }
         sub.insert(idx);
     }
-    if (subsets_to_wts.find(sub) != subsets_to_wts.end()) {
+    LightSubset lsub{sub};
+    if (subsets_to_wts.find(lsub) != subsets_to_wts.end()) {
         throw OTCError() << "subset repeated in subset weighting lines";
     }
-    subsets_to_wts[sub] = wt;
-    subsets_to_subset_idx[sub] = data.input_sub_order.size();
-    data.input_sub_order.push_back(sub);
+    subsets_to_wts[lsub] = wt;
+    subsets_to_subset_idx[lsub] = data.input_sub_order.size();
+    data.input_sub_order.push_back(lsub);
 }
 
 void name_parser(const str_list & broken_line, Data & data) {
