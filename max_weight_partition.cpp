@@ -8,7 +8,7 @@
 
 // using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 // cache_map_t SOLN_CACHE;
-LRUCache SOLN_CACHE{1000000};
+LRUCache SOLN_CACHE{4000000};
 
 bool USE_MOST_FREQ = false;
 
