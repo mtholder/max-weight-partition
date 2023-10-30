@@ -86,13 +86,22 @@ public:
     map<LightSubset, size_t> subsets_to_subset_idx;
     subset_vec_t input_sub_order;
     size_t num_subsets;
+    list<subset_t> tmp_subsets; // for clique-detection
 };
 
 using broken_line_parser = void (*)(const str_list &, Data & );
 void subset_encoder(const str_list & broken_line, Data & data);
+void grouped_names_detection_loader(const str_list & broken_line, Data & data);
+void detect_grouped_names(Data & data);
 void name_parser(const str_list & broken_line, Data & data);
 void read_labels(string & fp, Data & data, broken_line_parser blp);
 void validate_data(Data & data);
 
+template<typename T>
+inline std::set<T> set_intersection_as_set(const std::set<T> & fir, const std::set<T> & sec) {
+    std::set<T> d;
+    set_intersection(begin(fir), end(fir), begin(sec), end(sec), std::inserter(d, d.end()));
+    return d;
+}
 
 #endif

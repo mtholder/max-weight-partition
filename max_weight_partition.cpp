@@ -401,10 +401,19 @@ void run(std::string &fp) {
     Data data;
     gData = &data;
     read_labels(fp, data, name_parser);
+    cerr << "Before simplification " << data.idx2name.size() << " labels:\n";
     unsigned idx = 0;
     for (auto name : data.idx2name) {
-        cerr << "  label " << idx++ << " \"" << name << "\"\n";
+        cerr << "  label " << idx++ << " \'" << name << "\'\n";
     }
+    read_labels(fp, data, grouped_names_detection_loader);
+    detect_grouped_names(data);
+    cerr << "After simplification " << data.idx2name.size() << " labels:\n";
+    idx = 0;
+    for (auto name : data.idx2name) {
+        cerr << "  label " << idx++ << " \'" << name << "\'\n";
+    }
+    
     read_labels(fp, data, subset_encoder);
     validate_data(data);
     if (QUIET_MODE) {

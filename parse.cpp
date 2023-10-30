@@ -1,4 +1,5 @@
 #include "max_weight_partition.h"
+#include <cassert>
 
 str_list split_string(const std::string &s, const char delimiter);
 
@@ -17,6 +18,7 @@ inline str_list split_string(const std::string &s, const char delimiter) {
     }
     return r;
 }
+
 
 void subset_encoder(const str_list & broken_line, Data & data) {
     const auto & name2idx = data.name2idx;
@@ -41,9 +43,7 @@ void subset_encoder(const str_list & broken_line, Data & data) {
             continue;
         }
         auto idx = name2idx.at(word);
-        if (sub.find(idx) != sub.end()) {
-            throw OTCError() << "label \"" << word << "\" repeated in a subset.\n";
-        }
+        // don't check for duplicates, because our grouped names will lead to dups.
         sub.insert(idx);
     }
     LightSubset lsub{sub};
@@ -53,6 +53,109 @@ void subset_encoder(const str_list & broken_line, Data & data) {
     subsets_to_wts[lsub] = wt;
     subsets_to_subset_idx[lsub] = data.input_sub_order.size();
     data.input_sub_order.push_back(lsub);
+}
+
+void grouped_names_detection_loader(const str_list & broken_line, Data & data) {
+    const auto & name2idx = data.name2idx;
+    subset_t sub;
+    bool first = true;
+    for (auto word : broken_line) {
+        if (first) {
+            first = false;
+            continue;
+        }
+        auto idx = name2idx.at(word);
+        if (sub.find(idx) != sub.end()) {
+            throw OTCError() << "label \"" << word << "\" repeated in a subset.\n";
+        }
+        sub.insert(idx);
+    }
+    data.tmp_subsets.push_back(sub);
+}
+
+void detect_grouped_names(Data & data) {
+    auto & idx2name = data.idx2name;
+    
+    set<size_t> ids_to_check;
+    for (size_t i=0; i < idx2name.size(); ++i) {
+        ids_to_check.insert(i);
+    }
+    set<size_t> remapped;
+    list<subset_t> remapping_in_order;
+
+    while (!ids_to_check.empty()) {
+        auto next_to_check = ids_to_check.begin();
+        auto raw_label_idx = *next_to_check;
+        ids_to_check.erase(next_to_check);
+        if (remapped.count(raw_label_idx) == 1) {
+            continue;
+        }
+        auto scratch_id_set = ids_to_check;
+        for (auto & sub : data.tmp_subsets) {
+            if (sub.count(raw_label_idx) == 0) {
+                continue;
+            }
+            scratch_id_set = set_intersection_as_set(scratch_id_set, sub);
+            if (scratch_id_set.empty()) {
+                break;
+            }
+        }
+        scratch_id_set.insert(raw_label_idx);
+        if (!scratch_id_set.empty()) {
+            remapping_in_order.push_back(scratch_id_set);
+            for (auto el : scratch_id_set) {
+                if (el != raw_label_idx) {
+                    ids_to_check.erase(el);
+                }
+                remapped.insert(el);
+            }
+        }
+    }
+    if (remapping_in_order.empty()) {
+        assert(remapped.empty());
+        return;
+    }
+    assert(!remapped.empty());
+    vector<string> remapped_idx2name;
+    remapped_idx2name.reserve(data.idx2name.size());
+    for (auto rs : remapping_in_order) {
+        stringstream nn;
+        bool first = true;
+        for (auto el : rs) {
+            if (first) {
+                first = false;
+            } else {
+                nn << "\', \'";
+            }
+            nn << idx2name.at(el);
+        }
+        remapped_idx2name.push_back(nn.str());
+    }
+    size_t old_idx = 0;
+    for (auto old_name :  data.idx2name) {
+        if (remapped.count(old_idx) == 1) {
+            old_idx++;
+            continue;
+        }
+        remapped_idx2name.push_back(idx2name.at(old_idx++));
+    }
+    map<string, size_t> complete_name2idx;
+    auto ri2n_it = remapped_idx2name.begin();
+    auto remapping_it = remapping_in_order.begin();
+    for (size_t idx=0; idx < remapped_idx2name.size(); ++idx) {
+        complete_name2idx[*ri2n_it++] = idx;
+        if (idx < remapping_in_order.size()) {
+            const auto & old_name_idx_set = *remapping_it++;
+            for (auto old_id: old_name_idx_set) {
+                auto old_name = idx2name.at(old_id);
+                complete_name2idx[old_name] = idx;
+            }
+        }
+    }
+    assert(ri2n_it == remapped_idx2name.end());
+    assert(remapping_it == remapping_in_order.end());
+    swap(data.idx2name, remapped_idx2name);
+    swap(data.name2idx, complete_name2idx);    
 }
 
 void name_parser(const str_list & broken_line, Data & data) {
