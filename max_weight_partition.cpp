@@ -6,6 +6,13 @@
 #include <sstream>
 #include "LRUCache.h"
 
+#define JUST_COUNT 3
+#define MAX_LEVEL_STATUS 2
+
+#if defined JUST_COUNT
+size_t num_cc_calcs_at_level = 0;
+#endif
+
 // using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 // cache_map_t SOLN_CACHE;
 LRUCache SOLN_CACHE{1000000};
@@ -166,12 +173,14 @@ inline std::set<T> set_difference_as_set(const std::set<T> & fir, const std::set
 shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
                                   const vector<LightSubset> &viable_others,
                                   const ConnectedComponent & par_cc) {
-    
+# if defined JUST_COUNT
+# else
     auto cache_pair = SOLN_CACHE.get_pair(labels_needed);
     if (cache_pair.first) {
         db_msg_set(par_cc.level, "Cache hit for", labels_needed);
         return cache_pair.second;
     }
+# endif    
 
     assert(!viable_others.empty());
     subset_t labels_still_needed = labels_needed;
@@ -186,8 +195,12 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
         }
     }
     if (! have_labels_we_need) {
+#     if defined JUST_COUNT
+        num_cc_calcs_at_level++;
+#     else
         db_msg_set(par_cc.level, "Missing labels", labels_still_needed);
         SOLN_CACHE.put(labels_needed, shared_ptr<ConnectedComponent>{});
+#     endif    
         return nullptr;
     }
     assert(labels_union == labels_needed);
@@ -200,7 +213,9 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
     new_cc->level = par_cc.level + 1;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
     new_cc->fill_resolutions();
-    SOLN_CACHE.put(labels_needed, new_cc);
+#  if !defined JUST_COUNT
+        SOLN_CACHE.put(labels_needed, new_cc);
+#  endif
     return new_cc;
 }
 
@@ -290,6 +305,12 @@ inline void ConnectedComponent::add_resolution(subset_vec_t &v, double res_score
 }
 
 void ConnectedComponent::fill_resolutions() {
+# if defined JUST_COUNT
+    if (level >= JUST_COUNT) {
+        num_cc_calcs_at_level++;
+        return;
+    }
+# endif
     assert(!subsets_to_wts.empty());
     if (subsets_to_wts.size() == 1) {
         const auto first_it = subsets_to_wts.begin();
@@ -318,7 +339,7 @@ void ConnectedComponent::fill_resolutions() {
     db_msg_set_container(level, "others", others);
     size_t alt_idx = 0;
     for (auto alt : alternatives) {
-        if (level < 4) {
+        if (level < MAX_LEVEL_STATUS) {
             stringstream x;
             x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
             indented_msg(level, x.str());
@@ -332,9 +353,13 @@ void ConnectedComponent::fill_resolutions() {
                         inserter(labels_needed, labels_needed.begin()));
         db_msg_set(level, " NEXT labels_needed", labels_needed);;
         if (labels_needed.empty()) {
+#     if defined JUST_COUNT
+            num_cc_calcs_at_level++;
+#     else
             subset_vec_t subsets_vec{1, curr_subset};
             add_resolution(subsets_vec, curr_score);
             db_msg(level, "  no leaves needed for this alt");
+#     endif
             continue;
         }
         viable_others.clear();
@@ -346,10 +371,17 @@ void ConnectedComponent::fill_resolutions() {
         }
         db_msg_set_container(level, "  viable_others", viable_others);
         if (viable_others.empty()) {
+#     if defined JUST_COUNT
+            num_cc_calcs_at_level++;
+#     else
             db_msg(level, "  no viable_others for this alt");
+#     endif
             continue;
         }
         auto sub_cc = cc_for_subset(labels_needed, viable_others, *this);
+#     if defined JUST_COUNT
+            num_cc_calcs_at_level++;
+#     else
         if (sub_cc == nullptr) {
             db_msg(level, "  no sub_cc returned for this alt");
             continue;
@@ -364,6 +396,7 @@ void ConnectedComponent::fill_resolutions() {
             }
             add_resolution(subsets_vec, res.score + curr_score);
         }
+#     endif
     }
 }
 
@@ -430,7 +463,11 @@ void run(std::string &fp) {
         }
     }
     data.cc.fill_resolutions();
-    data.write(cout);
+#     if defined JUST_COUNT
+        cout << "num_subsets_with_label = " << num_cc_calcs_at_level << endl;
+#     else
+        data.write(cout);
+#     endif
 }
 
 int main(int argc, char *argv[]) {
