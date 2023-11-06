@@ -14,4 +14,4 @@ max-weight-partition: max_weight_partition.cpp error.h parse.o LRUCache.h LRUCac
 	
 clean:
 	$(RM) max-weight-partition
-	$(RM) parse.o
+	$(RM) parse.o LRUCache.o Cache.o
