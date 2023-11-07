@@ -31,8 +31,17 @@ public:
     bool operator<(const LightSubset &other) const {
         return real_set < other.real_set;
     }
+    bool operator==(const LightSubset &other) const {
+        return real_set == other.real_set;
+    }
+    bool operator!=(const LightSubset &other) const {
+        return real_set != other.real_set;
+    }
     size_t count(size_t el_idx) const {
         return real_set.count(el_idx);
+    }
+    size_t size() const {
+        return real_set.size();
     }
     const subset_t & stored_set() const {
         return real_set;
@@ -61,7 +70,7 @@ using res_by_size_t = map<size_t, Resolution>;
 
 class ConnectedComponent {
 public:
-    void fill_resolutions();
+    void fill_resolutions(unsigned num_greedy_steps);
 
     subset2wt_t subsets_to_wts;
     subset_t label_set;
@@ -71,6 +80,11 @@ private:
     void add_resolution(subset_vec_t &v, double res_score);
     size_t choose_one_label_index() const;
     unsigned int num_subsets_with_label(size_t curr_idx) const;
+    LightSubset get_highest_weight_subset(const set<LightSubset> & taboo_set) const;
+    void finish_from_subset(const LightSubset & curr_subset,
+                            const vector<LightSubset> & others,
+                            unsigned num_greedy_steps);
+
     
 };
 

@@ -165,7 +165,8 @@ inline std::set<T> set_difference_as_set(const std::set<T> & fir, const std::set
 
 shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
                                   const vector<LightSubset> &viable_others,
-                                  const ConnectedComponent & par_cc) {
+                                  const ConnectedComponent & par_cc,
+                                  unsigned num_greedy_steps) {
     
     auto cache_pair = SOLN_CACHE.get_pair(labels_needed);
     if (cache_pair.first) {
@@ -199,7 +200,7 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
     new_cc->label_set = labels_needed;
     new_cc->level = par_cc.level + 1;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
-    new_cc->fill_resolutions();
+    new_cc->fill_resolutions(num_greedy_steps);
     SOLN_CACHE.put(labels_needed, new_cc);
     return new_cc;
 }
@@ -289,7 +290,29 @@ inline void ConnectedComponent::add_resolution(subset_vec_t &v, double res_score
     }
 }
 
-void ConnectedComponent::fill_resolutions() {
+LightSubset ConnectedComponent::get_highest_weight_subset(const set<LightSubset> & taboo_set) const {
+    assert(!subsets_to_wts.empty());
+    subset2wt_t::const_iterator opt_it = subsets_to_wts.end();
+    double highest_wt = -1.0;
+    auto s2w_it = subsets_to_wts.begin();
+    for (; s2w_it != subsets_to_wts.end(); ++s2w_it) {
+        if (s2w_it->second >= highest_wt) {
+            if (taboo_set.find(s2w_it->first) != taboo_set.end()) {
+                continue;
+            }
+            opt_it = s2w_it;
+            highest_wt = s2w_it->second;
+        }
+    }
+    if (opt_it == subsets_to_wts.end()) {
+        throw OTCError() << "No subset not in taboo_set";
+    }
+    return opt_it->first;
+}
+
+void ConnectedComponent::fill_resolutions(unsigned num_greedy_steps) {
+    //std::cerr << "fill_resolutions num_greedy_steps=" << num_greedy_steps << endl;
+        
     assert(!subsets_to_wts.empty());
     if (subsets_to_wts.size() == 1) {
         const auto first_it = subsets_to_wts.begin();
@@ -297,12 +320,43 @@ void ConnectedComponent::fill_resolutions() {
         add_resolution(subsets_vec, first_it->second);
         return;
     }
+    vector<LightSubset> others;
+    others.reserve(subsets_to_wts.size());
+    if (num_greedy_steps > 0) {
+        set<LightSubset> taboo;
+        while (taboo.size() < subsets_to_wts.size()) {
+            others.clear();
+            std::cerr << "fill_resolutions num_greedy_steps=" << num_greedy_steps << endl;
+            LightSubset highwt_sub = get_highest_weight_subset(taboo);
+            std::cerr << "  highwt_sub.size()=" <<  highwt_sub.size() 
+                      << "  weight= " << subsets_to_wts.at(highwt_sub) << endl;
+            if (highwt_sub.size() == label_set.size()) {
+                subset_vec_t subsets_vec{1, highwt_sub};
+                add_resolution(subsets_vec, subsets_to_wts.at(highwt_sub));
+                return;
+            }
+            for (auto s2w : subsets_to_wts) {
+                auto & subset = s2w.first;
+                if (subset == highwt_sub) {
+                    continue;
+                }
+                if (is_disjoint(subset.stored_set(), highwt_sub.stored_set())) {
+                    others.push_back(subset);
+                }
+            }
+            std::cerr << "  others.size()=" <<  others.size() << endl;
+            finish_from_subset(highwt_sub, others, num_greedy_steps - 1);
+            if (resolutions.empty()) {
+                taboo.insert(highwt_sub);
+            } else {
+                return;
+            }
+        }
+    }
     size_t one_label_idx = choose_one_label_index();
     db_msg_pivot(level, one_label_idx);
     vector<LightSubset> alternatives;
-    vector<LightSubset> others;
     alternatives.reserve(subsets_to_wts.size());
-    others.reserve(subsets_to_wts.size());
     for (auto s2w_it : subsets_to_wts) {
         const LightSubset & subset_ref = (s2w_it.first);
         if (subset_ref.count(one_label_idx) == 1) {
@@ -312,58 +366,63 @@ void ConnectedComponent::fill_resolutions() {
         }
     }
     assert(!alternatives.empty());
-    vector<LightSubset> viable_others;
-    viable_others.reserve(subsets_to_wts.size());
     db_msg_set_container(level, "alternatives", alternatives);
     db_msg_set_container(level, "others", others);
     size_t alt_idx = 0;
     for (auto alt : alternatives) {
-        if (level < 4) {
+        if (level < 10) {
             stringstream x;
             x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
             indented_msg(level, x.str());
         }
-        const LightSubset & curr_subset = alt;
-        db_msg_set(level, " NEXT alt", curr_subset.stored_set());
-        double curr_score = subsets_to_wts.at(curr_subset);
-        subset_t labels_needed;
-        set_difference (label_set.begin(), label_set.end(),
-                        curr_subset.begin(), curr_subset.end(),
-                        inserter(labels_needed, labels_needed.begin()));
-        db_msg_set(level, " NEXT labels_needed", labels_needed);;
-        if (labels_needed.empty()) {
-            subset_vec_t subsets_vec{1, curr_subset};
-            add_resolution(subsets_vec, curr_score);
-            db_msg(level, "  no leaves needed for this alt");
-            continue;
+        finish_from_subset(alt, others, 0);
+    }
+}
+
+void ConnectedComponent::finish_from_subset(const LightSubset & curr_subset,
+                                            const vector<LightSubset> & others,
+                                            unsigned num_greedy_steps) {
+    vector<LightSubset> viable_others;
+    viable_others.reserve(subsets_to_wts.size());
+    db_msg_set(level, " NEXT alt", curr_subset.stored_set());
+    double curr_score = subsets_to_wts.at(curr_subset);
+    subset_t labels_needed;
+    set_difference (label_set.begin(), label_set.end(),
+                    curr_subset.begin(), curr_subset.end(),
+                    inserter(labels_needed, labels_needed.begin()));
+    db_msg_set(level, " NEXT labels_needed", labels_needed);;
+    if (labels_needed.empty()) {
+        subset_vec_t subsets_vec{1, curr_subset};
+        add_resolution(subsets_vec, curr_score);
+        db_msg(level, "  no leaves needed for this alt");
+        return;
+    }
+    viable_others.clear();
+    for (auto other_set_ptr : others) {
+        const LightSubset & other_set = other_set_ptr;
+        if (is_disjoint(other_set.stored_set(), curr_subset.stored_set())) {
+            viable_others.push_back(other_set);
         }
-        viable_others.clear();
-        for (auto other_set_ptr : others) {
-            const LightSubset & other_set = other_set_ptr;
-            if (is_disjoint(other_set.stored_set(), curr_subset.stored_set())) {
-                viable_others.push_back(other_set);
-            }
+    }
+    db_msg_set_container(level, "  viable_others", viable_others);
+    if (viable_others.empty()) {
+        db_msg(level, "  no viable_others for this alt");
+        return;
+    }
+    auto sub_cc = cc_for_subset(labels_needed, viable_others, *this, num_greedy_steps);
+    if (sub_cc == nullptr) {
+        db_msg(level, "  no sub_cc returned for this alt");
+        return;
+    }
+    for (auto sres : sub_cc->resolutions) {
+        const Resolution & res = sres.second;
+        subset_vec_t subsets_vec;
+        subsets_vec.reserve(1 + res.subsets.size());
+        subsets_vec.push_back(curr_subset);
+        for (auto s : res.subsets) {
+            subsets_vec.push_back(s);
         }
-        db_msg_set_container(level, "  viable_others", viable_others);
-        if (viable_others.empty()) {
-            db_msg(level, "  no viable_others for this alt");
-            continue;
-        }
-        auto sub_cc = cc_for_subset(labels_needed, viable_others, *this);
-        if (sub_cc == nullptr) {
-            db_msg(level, "  no sub_cc returned for this alt");
-            continue;
-        }
-        for (auto sres : sub_cc->resolutions) {
-            const Resolution & res = sres.second;
-            subset_vec_t subsets_vec;
-            subsets_vec.reserve(1 + res.subsets.size());
-            subsets_vec.push_back(curr_subset);
-            for (auto s : res.subsets) {
-                subsets_vec.push_back(s);
-            }
-            add_resolution(subsets_vec, res.score + curr_score);
-        }
+        add_resolution(subsets_vec, res.score + curr_score);
     }
 }
 
@@ -396,7 +455,7 @@ void Data::write(ostream & out) const {
     }
 }
 
-void run(std::string &fp) {
+void run(std::string &fp, unsigned num_greedy) {
     bool QUIET_MODE = true;
     Data data;
     gData = &data;
@@ -429,18 +488,40 @@ void run(std::string &fp) {
             cerr << "} weight = " << data.cc.subsets_to_wts.at(sub) << endl;
         }
     }
-    data.cc.fill_resolutions();
+    data.cc.fill_resolutions(num_greedy);
     data.write(cout);
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        std::cerr << "Expecting 1 argument: a filepath to a subset frequencies file.\n";
+    if (argc != 2 && argc != 3) {
+        std::cerr << "Expecting 1 or 2 argument: a filepath to a subset frequencies file, and (optionally) a number of greedy steps to take.\n";
         return 1;
     }
+    unsigned num_greedy = 0;
+    if (argc == 3) {
+        std::string narg{argv[2]};
+        size_t sz;
+        int g_arg = -1;
+        try {
+            g_arg = std::stoi(narg, &sz);
+        } catch (...) {
+            std::cerr << "Could not convert " << narg << " to an integer." << endl;
+            return 1;
+        }
+        if (sz != narg.length()) {
+            std::cerr << "Could not convert all of " << narg << " to an integer." << endl;
+            return 1;
+        }
+        if (g_arg < 0) {
+            std::cerr << "Number of greedy steps cannot be negative" << endl;
+            return 1;    
+        }
+        num_greedy = (unsigned) g_arg;
+    }
     std::string fp{argv[1]};
+
     try {
-        run(fp);
+        run(fp, num_greedy);
     } catch (std::exception & e) {
         std::cerr << "max-weight-partition exception: " << e.what() << std::endl;
         return 2;
