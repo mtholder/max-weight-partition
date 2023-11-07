@@ -370,7 +370,7 @@ void ConnectedComponent::fill_resolutions(unsigned num_greedy_steps) {
     db_msg_set_container(level, "others", others);
     size_t alt_idx = 0;
     for (auto alt : alternatives) {
-        if (level < 10) {
+        if (level < 8) {
             stringstream x;
             x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
             indented_msg(level, x.str());
