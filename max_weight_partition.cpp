@@ -427,32 +427,47 @@ void ConnectedComponent::finish_from_subset(const LightSubset & curr_subset,
 }
 
 void Data::write(ostream & out) const {
-    out << cc.label_set.size() << " labels, " 
-        << cc.subsets_to_wts.size() << " subsets.\n";
+    // out << cc.label_set.size() << " labels, " 
+    //     << cc.subsets_to_wts.size() << " subsets.\n";
+    out << "[";
+    bool is_first_res = true;
     for (auto size_res_pair : cc.resolutions) {
+        if (is_first_res) {
+            is_first_res = false;
+        } else {
+            out << ',';
+        }
+        out << '\n';
         const auto & res = size_res_pair.second;
-        out << "  " << size_res_pair.first << " subsets, best score=" << res.score << ": [";
+        out << "  {\n    \"score\": " << res.score << ",\n"
+            << "    \"size\": " << size_res_pair.first << ",\n"
+            << "    \"subsets\": [\n"
+            << "      [";
         unsigned is_first_sub = true;
         for (auto & s : res.subsets) {
             if (is_first_sub) {
                 is_first_sub = false;
             } else {
-                out << ", ";
+                out << ",\n      [";
             }
-            out << "frozenset({";
-            bool is_first_label = true;
+            set<string> conv;
             for (auto & label_idx : s) {
+                conv.insert(idx2name[label_idx]);
+            }
+            bool is_first_label = true;
+            for (auto & label : conv) {
                 if (is_first_label) {
                     is_first_label = false;
                 } else {
                     out << ", ";
                 }
-                out << '\'' << idx2name[label_idx] << '\'';
+                out << '\"' << label << '\"';
             }
-            out << "})";
+            out << "]";
         }
-        out << "]\n";
+        out << "\n    ]\n  }\n";
     }
+    out << ']' << endl;
 }
 
 void run(std::string &fp, unsigned num_greedy) {
