@@ -4,6 +4,7 @@
 #include <climits>
 #include <algorithm>
 #include <sstream>
+#include <limits>
 #include "LRUCache.h"
 
 // using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
@@ -293,7 +294,7 @@ inline void ConnectedComponent::add_resolution(subset_vec_t &v, double res_score
 LightSubset ConnectedComponent::get_highest_weight_subset(const set<LightSubset> & taboo_set) const {
     assert(!subsets_to_wts.empty());
     subset2wt_t::const_iterator opt_it = subsets_to_wts.end();
-    double highest_wt = -1.0;
+    double highest_wt = std::numeric_limits<double>::lowest();
     auto s2w_it = subsets_to_wts.begin();
     for (; s2w_it != subsets_to_wts.end(); ++s2w_it) {
         if (s2w_it->second >= highest_wt) {
@@ -443,16 +444,21 @@ void Data::write(ostream & out) const {
             << "    \"size\": " << size_res_pair.first << ",\n"
             << "    \"subsets\": [\n"
             << "      [";
-        unsigned is_first_sub = true;
+        set< set< string > > for_sorting;
         for (auto & s : res.subsets) {
+            set<string> conv;
+            for (auto & label_idx : s) {
+                conv.insert(idx2name[label_idx]);
+            }
+            for_sorting.insert(conv);
+        }
+
+        unsigned is_first_sub = true;
+        for (auto & conv : for_sorting) {
             if (is_first_sub) {
                 is_first_sub = false;
             } else {
                 out << ",\n      [";
-            }
-            set<string> conv;
-            for (auto & label_idx : s) {
-                conv.insert(idx2name[label_idx]);
             }
             bool is_first_label = true;
             for (auto & label : conv) {

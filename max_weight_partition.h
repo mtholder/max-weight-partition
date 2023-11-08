@@ -9,6 +9,7 @@
 #include <list>
 #include <tuple>
 #include <utility>
+#include <limits>
 
 #include <cstdlib> 
 #include "error.h"
@@ -56,7 +57,7 @@ using subset_vec_t = vector<LightSubset>;
 class Resolution {
 public:
     Resolution()
-        :score(-1) {
+        :score(std::numeric_limits<double>::lowest()) {
 
     }
     Resolution(const subset_vec_t & subsets_vec, double res_score)
@@ -101,6 +102,7 @@ public:
     subset_vec_t input_sub_order;
     size_t num_subsets;
     list<subset_t> tmp_subsets; // for clique-detection
+    bool as_log_prob = true;
 };
 
 using broken_line_parser = void (*)(const str_list &, Data & );

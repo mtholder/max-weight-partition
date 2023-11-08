@@ -1,5 +1,6 @@
 #include "max_weight_partition.h"
 #include <cassert>
+#include <cmath>
 
 str_list split_string(const std::string &s, const char delimiter);
 
@@ -24,7 +25,8 @@ void subset_encoder(const str_list & broken_line, Data & data) {
     const auto & name2idx = data.name2idx;
     auto & subsets_to_wts = data.cc.subsets_to_wts;
     auto & subsets_to_subset_idx = data.subsets_to_subset_idx;
-    double wt = -1.0;
+    double wt = -1.0; // at this point, weight (from the file will be positive)
+                      //   log-transform happens after.
     data.stable_subsets.emplace_back();
     subset_t & sub = *(data.stable_subsets.rbegin());
     data.input_sub_order.reserve(data.num_subsets);
@@ -238,5 +240,12 @@ void validate_data(Data & data) {
         }
     }
     cerr << "each label has a sum of weights = " << sum_wts << endl;
+
+    if (data.as_log_prob) {
+        const double negLnCount = -log(sum_wts);
+        for (auto & s2w : data.cc.subsets_to_wts) {
+            s2w.second = log(s2w.second) + negLnCount;
+        }
+    }
 }
 
