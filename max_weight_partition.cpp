@@ -9,9 +9,10 @@
 
 // using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 // cache_map_t SOLN_CACHE;
-LRUCache SOLN_CACHE{1000000};
+LRUCache SOLN_CACHE{2000000};
 
 bool USE_MOST_FREQ = false;
+unsigned g_output_level = UINT_MAX;
 
 const Data *gData = nullptr;
 
@@ -370,8 +371,11 @@ void ConnectedComponent::fill_resolutions(unsigned num_greedy_steps) {
     db_msg_set_container(level, "alternatives", alternatives);
     db_msg_set_container(level, "others", others);
     size_t alt_idx = 0;
+    if (g_output_level == UINT_MAX) {
+        g_output_level = level;
+    }
     for (auto alt : alternatives) {
-        if (level < 8) {
+        if (level == g_output_level) {
             stringstream x;
             x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
             indented_msg(level, x.str());
