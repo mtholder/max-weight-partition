@@ -110,7 +110,7 @@ void detect_grouped_names(Data & data) {
             if (first) {
                 first = false;
             } else {
-                nn << "\', \'";
+                nn << "\", \"";
             }
             nn << idx2name.at(el);
         }
