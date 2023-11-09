@@ -9,10 +9,11 @@
 
 // using cache_map_t = std::map<subset_t, const ConnectedComponent *>;
 // cache_map_t SOLN_CACHE;
-LRUCache SOLN_CACHE{2000000};
+LRUCache * SOLN_CACHE = nullptr;
 
 bool USE_MOST_FREQ = false;
 unsigned g_output_level = UINT_MAX;
+unsigned g_lower_than_output_level = 0;
 
 const Data *gData = nullptr;
 
@@ -170,10 +171,12 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
                                   const ConnectedComponent & par_cc,
                                   unsigned num_greedy_steps) {
     
-    auto cache_pair = SOLN_CACHE.get_pair(labels_needed);
-    if (cache_pair.first) {
-        db_msg_set(par_cc.level, "Cache hit for", labels_needed);
-        return cache_pair.second;
+    if (SOLN_CACHE) {
+        auto cache_pair = SOLN_CACHE->get_pair(labels_needed);
+        if (cache_pair.first) {
+            db_msg_set(par_cc.level, "Cache hit for", labels_needed);
+            return cache_pair.second;
+        }
     }
 
     assert(!viable_others.empty());
@@ -190,7 +193,9 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
     }
     if (! have_labels_we_need) {
         db_msg_set(par_cc.level, "Missing labels", labels_still_needed);
-        SOLN_CACHE.put(labels_needed, shared_ptr<ConnectedComponent>{});
+        if (SOLN_CACHE) {
+            SOLN_CACHE->put(labels_needed, shared_ptr<ConnectedComponent>{});
+        }
         return nullptr;
     }
     assert(labels_union == labels_needed);
@@ -203,7 +208,9 @@ shared_ptr<ConnectedComponent> cc_for_subset(const subset_t & labels_needed,
     new_cc->level = par_cc.level + 1;
     // cerr << "CALLING fill_resolutions on sub_cc" << endl;
     new_cc->fill_resolutions(num_greedy_steps);
-    SOLN_CACHE.put(labels_needed, new_cc);
+    if (SOLN_CACHE) {
+        SOLN_CACHE->put(labels_needed, new_cc);
+    }
     return new_cc;
 }
 
@@ -375,9 +382,9 @@ void ConnectedComponent::fill_resolutions(unsigned num_greedy_steps) {
         g_output_level = level;
     }
     for (auto alt : alternatives) {
-        if (level == g_output_level) {
+        if (level == g_output_level || level < g_lower_than_output_level) {
             stringstream x;
-            x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE.size();
+            x << alt_idx++ << "/" << alternatives.size() << " cache.size() = " << SOLN_CACHE->size();
             indented_msg(level, x.str());
         }
         finish_from_subset(alt, others, 0);
@@ -517,6 +524,93 @@ void run(std::string &fp, unsigned num_greedy) {
     data.write(cout);
 }
 
+
+unsigned g_cache_size = 2000000;
+
+inline pair<bool, int> read_as_int(const string &narg) {
+    pair<bool, int> ret{false, INT_MAX};
+    int g_arg = -1;
+    size_t sz;
+    try {
+        g_arg = std::stoi(narg, &sz);
+    } catch (...) {
+        std::cerr << "Could not convert " << narg << " to an integer." << endl;
+        return ret;
+    }
+    if (sz != narg.length()) {
+        std::cerr << "Could not convert all of " << narg << " to an integer." << endl;
+        return ret;
+    }
+    ret.second = g_arg;
+    ret.first = true;
+    return ret;
+}
+
+inline pair<bool, unsigned> read_as_unsigned(const string &narg) {
+    auto iret = read_as_int(narg);
+    pair<bool, unsigned> ret{false, UINT_MAX};
+    if (!iret.first) {
+        return ret;
+    }
+    if (iret.second < 0) {
+        std::cerr << "Cannot be negative" << endl;
+        return ret;    
+    }
+    ret.second = (unsigned) iret.second;
+    ret.first = true;
+    return ret;
+}
+
+void set_globals_from_rc_file() {
+    ifstream inp(".max_weight_partition.cfg");
+    if (!inp.good()) {
+        std::cerr << "No config file .max_weight_partition.cfg found. Using defaults." << endl;
+        return;
+    }
+    string buffer;
+    while(getline(inp, buffer)) {
+        string x = strip_surrounding_whitespace(buffer);
+        if (x.empty()) {
+            continue;
+        }
+        if (x[0] == '#') {
+            continue; // skip lines starting with #
+        }
+        auto sp_on_eq = split_string(x, '=');
+        if (sp_on_eq.size() != 2) {
+            throw OTCError() << "in .max_weight_partition.cfg, expecting exactly 1 = per line. Got:\n" << buffer << '\n';
+        }
+        const string key = strip_surrounding_whitespace(*sp_on_eq.begin());
+        const string value = strip_surrounding_whitespace(*sp_on_eq.rbegin());
+        if (key == "cache_size") {
+            auto v_ret = read_as_unsigned(value);
+            if (!v_ret.first || v_ret.second == 0) {
+                throw OTCError() << "in .max_weight_partition.cfg, couldn't read " << value << " for " << key << " as a positive integer." ;
+            }
+            g_cache_size = v_ret.second;
+        } else if (key == "output_exact_level") {
+            auto v_ret = read_as_int(value);
+            if (!v_ret.first) {
+                throw OTCError() << "in .max_weight_partition.cfg, couldn't read " << value << " for " << key << " as an integer." ;
+            }
+            if (v_ret.second < 0) {
+                g_output_level = UINT_MAX - 1; // will never trigger output
+            } else {
+                g_output_level = (unsigned) v_ret.second;
+            }
+        } else if (key == "output_less_than_level") {
+            auto v_ret = read_as_unsigned(value);
+            if (!v_ret.first) {
+                throw OTCError() << "in .max_weight_partition.cfg, couldn't read " << value << " for " << key << " as a non-negative integer." ;
+            }
+            g_lower_than_output_level = (unsigned) v_ret.second;
+        } else {
+            throw OTCError() << "in .max_weight_partition.cfg, unrecognized key " << key;
+        }
+    }
+}
+
+
 int main(int argc, char *argv[]) {
     if (argc != 2 && argc != 3) {
         std::cerr << "Expecting 1 or 2 argument: a filepath to a subset frequencies file, and (optionally) a number of greedy steps to take.\n";
@@ -525,27 +619,18 @@ int main(int argc, char *argv[]) {
     unsigned num_greedy = 0;
     if (argc == 3) {
         std::string narg{argv[2]};
-        size_t sz;
-        int g_arg = -1;
-        try {
-            g_arg = std::stoi(narg, &sz);
-        } catch (...) {
-            std::cerr << "Could not convert " << narg << " to an integer." << endl;
+        auto g_ret = read_as_unsigned(narg);
+        if (!g_ret.first) {
             return 1;
         }
-        if (sz != narg.length()) {
-            std::cerr << "Could not convert all of " << narg << " to an integer." << endl;
-            return 1;
-        }
-        if (g_arg < 0) {
-            std::cerr << "Number of greedy steps cannot be negative" << endl;
-            return 1;    
-        }
-        num_greedy = (unsigned) g_arg;
+        num_greedy = g_ret.second;
     }
     std::string fp{argv[1]};
-
     try {
+        set_globals_from_rc_file();
+        cerr << "creating cache of size " << g_cache_size << endl;
+        LRUCache main_cache{g_cache_size};
+        SOLN_CACHE = &main_cache;
         run(fp, num_greedy);
     } catch (std::exception & e) {
         std::cerr << "max-weight-partition exception: " << e.what() << std::endl;

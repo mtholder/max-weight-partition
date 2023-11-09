@@ -2,23 +2,6 @@
 #include <cassert>
 #include <cmath>
 
-str_list split_string(const std::string &s, const char delimiter);
-
-inline str_list split_string(const std::string &s, const char delimiter) {
-    if (s.empty()) {
-        return {};
-    }
-    str_list r;
-    r.push_back({});
-    for (const auto & c : s) {
-        if (c == delimiter) {
-            r.push_back({});
-        } else {
-            r.back().append(1, c);
-        }
-    }
-    return r;
-}
 
 
 void subset_encoder(const str_list & broken_line, Data & data) {

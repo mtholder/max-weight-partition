@@ -9,6 +9,7 @@
 #include <list>
 #include <tuple>
 #include <utility>
+#include <cassert>
 #include <limits>
 
 #include <cstdlib> 
@@ -113,11 +114,62 @@ void name_parser(const str_list & broken_line, Data & data);
 void read_labels(string & fp, Data & data, broken_line_parser blp);
 void validate_data(Data & data);
 
+// the following are from otcetera
+
 template<typename T>
 inline std::set<T> set_intersection_as_set(const std::set<T> & fir, const std::set<T> & sec) {
     std::set<T> d;
     set_intersection(begin(fir), end(fir), begin(sec), end(sec), std::inserter(d, d.end()));
     return d;
+}
+
+
+inline str_list split_string(const std::string &s, const char delimiter) {
+    if (s.empty()) {
+        return {};
+    }
+    str_list r;
+    r.push_back({});
+    for (const auto & c : s) {
+        if (c == delimiter) {
+            r.push_back({});
+        } else {
+            r.back().append(1, c);
+        }
+    }
+    return r;
+}
+
+inline std::size_t find_first_graph_index(const std::string & s) {
+    std::size_t pos = 0U;
+    for (const auto & c : s) {
+        if (isgraph(c)) {
+            return pos;
+        }
+        ++pos;
+    }
+    return std::string::npos;
+}
+
+inline std::size_t find_last_graph_index(const std::string & s) {
+    auto pos = s.length();
+    while (pos > 0) {
+        --pos;
+        if (isgraph(s[pos])) {
+            return pos;
+        }
+    }
+    return std::string::npos;
+}
+
+inline std::string strip_surrounding_whitespace(const std::string &n) {
+    const auto s = find_first_graph_index(n);
+    if (s == std::string::npos) {
+        return std::string();
+    }
+    const auto e = find_last_graph_index(n);
+    assert(e != std::string::npos);
+    return n.substr(s, 1 + e - s);
 }
 
 #endif

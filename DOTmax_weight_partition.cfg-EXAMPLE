@@ -1,0 +1,2 @@
+cache_size = 1000000
+output_less_than_level = 4
